@@ -1,0 +1,5 @@
+# conceptunlock — robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://conceptunlock.vercel.app/sitemap.xml

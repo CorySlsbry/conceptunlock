@@ -1,0 +1,357 @@
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { createBrowserClient } from '@/lib/supabase/client';
+import { Check, Gift } from 'lucide-react';
+
+const plans = [
+  {
+    key: 'basic',
+    name: 'Starter',
+    price: 199,
+    features: ['Financial dashboard', 'Job costing & WIP', 'Cash flow forecasting', 'QuickBooks sync'],
+  },
+  {
+    key: 'pro',
+    name: 'Professional',
+    price: 299,
+    popular: true,
+    features: ['Everything in Starter', 'Buildertrend + HubSpot + JobNimbus', 'AI CFO advisor', 'Direct access to developer for features & fixes'],
+  },
+  {
+    key: 'enterprise',
+    name: 'Enterprise',
+    price: 399,
+    features: ['Everything in Professional', 'Procore + Salesforce + ServiceTitan', 'Quarterly strategy call', 'Dedicated account manager'],
+  },
+  {
+    key: 'whiteglove',
+    name: 'White Glove',
+    price: 1499,
+    features: ['Everything in Enterprise', 'Dedicated fractional controller', 'Weekly strategy call', 'Custom board reports'],
+  },
+];
+
+function SignupContent() {
+  const searchParams = useSearchParams();
+  const [selectedPlan, setSelectedPlan] = useState('pro');
+  const [fullName, setFullName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [discountCode, setDiscountCode] = useState<string | null>(null);
+  const [referredBy, setReferredBy] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Read plan + discount + ref from URL params and localStorage
+  useEffect(() => {
+    const planParam = searchParams.get('plan');
+    if (planParam && ['basic', 'pro', 'enterprise', 'whiteglove'].includes(planParam)) {
+      setSelectedPlan(planParam);
+    }
+
+    // Discount: URL takes precedence, then localStorage fallback
+    const urlDiscount = searchParams.get('discount');
+    const urlRef = searchParams.get('ref');
+    if (urlDiscount === 'REFER20') {
+      setDiscountCode('REFER20');
+      if (urlRef) setReferredBy(urlRef);
+      if (urlRef && !email) setEmail(urlRef);
+    } else if (typeof window !== 'undefined') {
+      try {
+        const stored = window.localStorage.getItem('referralDiscount');
+        const storedEmail = window.localStorage.getItem('referralEmail');
+        if (stored === 'REFER20') {
+          setDiscountCode('REFER20');
+          if (storedEmail) setReferredBy(storedEmail);
+          if (storedEmail && !email) setEmail(storedEmail);
+        }
+      } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      // Step 1: Create account
+      setLoadingStep('Creating your account...');
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName, companyName }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Signup failed');
+        setLoading(false);
+        setLoadingStep('');
+        return;
+      }
+
+      // Step 2: Sign in
+      setLoadingStep('Signing you in...');
+      const supabase = createBrowserClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError('Account created but sign-in failed: ' + signInError.message);
+        setLoading(false);
+        setLoadingStep('');
+        return;
+      }
+
+      // Step 3: Redirect to Stripe checkout (credit card required for 14-day free trial)
+      setLoadingStep('Setting up your free trial...');
+      const checkoutRes = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: selectedPlan,
+          discountCode: discountCode || undefined,
+        }),
+      });
+
+      const checkoutData = await checkoutRes.json();
+
+      if (!checkoutRes.ok || !checkoutData.data?.url) {
+        // Fallback to dashboard if checkout fails (account is still created)
+        console.error('Checkout redirect failed:', checkoutData);
+        router.push('/dashboard');
+        return;
+      }
+
+      // Redirect to Stripe checkout
+      window.location.href = checkoutData.data.url;
+      return;
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      setLoading(false);
+      setLoadingStep('');
+    }
+  };
+
+  const selectedPlanData = plans.find(p => p.key === selectedPlan);
+
+  return (
+    <div className="w-full max-w-2xl">
+      <div className="bg-[#12121a] rounded-lg border border-[#1e1e2e] p-8 shadow-2xl">
+        {/* Branding */}
+        <div className="mb-6 text-center">
+          <h1 className="font-bold text-2xl tracking-tight mb-1">
+            <span className="text-[#2563EB]">Builder</span><span className="text-[#e8e8f0]">CFO</span>
+          </h1>
+          <p className="text-sm text-[#8888a0] mb-3">
+            by ConceptUnlock
+          </p>
+          <h2 className="text-lg font-semibold text-[#e8e8f0]">
+            Start Your 14-Day Free Trial
+          </h2>
+          <p className="text-sm text-[#b0b0c8] mt-1">
+            No charge for 14 days. Credit card required. Cancel anytime.
+          </p>
+        </div>
+
+        {/* Referral Discount Banner */}
+        {discountCode === 'REFER20' && (
+          <div className="mb-5 bg-gradient-to-r from-[#2563EB]/15 to-[#a78bfa]/15 border border-[#2563EB]/40 rounded-lg p-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#2563EB]/20 border border-[#2563EB]/40 flex items-center justify-center flex-shrink-0">
+              <Gift size={16} className="text-[#a5b4fc]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white">20% off unlocked 🎉</p>
+              <p className="text-xs text-[#b0b0c8]">
+                {referredBy
+                  ? `Your 2 friend referrals from ${referredBy} are confirmed.`
+                  : 'Your referral discount is applied to this subscription.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Plan Selector */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {plans.map((plan) => {
+            const discounted = discountCode === 'REFER20';
+            const finalPrice = discounted ? Math.round(plan.price * 0.8) : plan.price;
+            return (
+              <button
+                key={plan.key}
+                type="button"
+                onClick={() => setSelectedPlan(plan.key)}
+                className={`relative p-3 rounded-lg border text-left transition-all ${
+                  selectedPlan === plan.key
+                    ? 'border-[#2563EB] bg-[#2563EB]/10'
+                    : 'border-[#2a2a3d] bg-[#0a0a0f] hover:border-[#3a3a4d]'
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-2 left-3 bg-[#2563EB] text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                    POPULAR
+                  </div>
+                )}
+                {plan.key === 'whiteglove' && (
+                  <div className="absolute -top-2 left-3 bg-gradient-to-r from-[#a78bfa] to-[#2563EB] text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                    WHITE GLOVE
+                  </div>
+                )}
+                <div className="text-sm font-semibold text-[#e8e8f0]">{plan.name}</div>
+                <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
+                  {discounted && (
+                    <span className="text-xs text-[#8888a0] line-through">${plan.price}</span>
+                  )}
+                  <span className="text-lg font-bold text-[#e8e8f0]">${finalPrice}</span>
+                  <span className="text-xs text-[#8888a0]">/mo</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected Plan Features */}
+        {selectedPlanData && (
+          <div className="bg-[#0a0a0f] border border-[#2a2a3d] rounded-lg p-3 mb-6">
+            <div className="grid grid-cols-2 gap-2">
+              {selectedPlanData.features.map((feature, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Check size={14} className="text-[#2563EB] flex-shrink-0" />
+                  <span className="text-xs text-[#b0b0c8]">{feature}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSignUp} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Full Name */}
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-[#e8e8f0] mb-1.5">
+                Full Name
+              </label>
+              <input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="John Doe"
+                required
+                className="w-full px-4 py-2 rounded bg-[#0a0a0f] border border-[#1e1e2e] text-[#e8e8f0] placeholder-[#8888a0] focus:outline-none focus:border-[#2563EB] transition"
+              />
+            </div>
+
+            {/* Company Name */}
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-medium text-[#e8e8f0] mb-1.5">
+                Company Name
+              </label>
+              <input
+                id="companyName"
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Your Company"
+                required
+                className="w-full px-4 py-2 rounded bg-[#0a0a0f] border border-[#1e1e2e] text-[#e8e8f0] placeholder-[#8888a0] focus:outline-none focus:border-[#2563EB] transition"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Email */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-[#e8e8f0] mb-1.5">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="person1@example.com"
+                required
+                className="w-full px-4 py-2 rounded bg-[#0a0a0f] border border-[#1e1e2e] text-[#e8e8f0] placeholder-[#8888a0] focus:outline-none focus:border-[#2563EB] transition"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-[#e8e8f0] mb-1.5">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+                className="w-full px-4 py-2 rounded bg-[#0a0a0f] border border-[#1e1e2e] text-[#e8e8f0] placeholder-[#8888a0] focus:outline-none focus:border-[#2563EB] transition"
+              />
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="bg-red-900/20 border border-red-700/50 rounded px-4 py-2 text-sm text-red-400">
+              {error}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full px-4 py-3 rounded-lg font-semibold text-white bg-[#2563EB] hover:bg-[#5558d9] disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {loading ? loadingStep || 'Processing...' : `Start Free Trial — ${selectedPlanData?.name} Plan`}
+          </button>
+
+          <p className="text-center text-xs text-[#8888a0]">
+            Credit card required. You won&apos;t be charged during your 14-day trial. Cancel anytime.
+          </p>
+        </form>
+
+        {/* Links */}
+        <div className="mt-5 text-center text-sm">
+          <span className="text-[#8888a0]">Already have an account? </span>
+          <Link
+            href="/login"
+            className="text-[#2563EB] hover:text-[#7c7fe5] font-medium transition"
+          >
+            Sign In
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="w-full max-w-2xl">
+        <div className="bg-[#12121a] rounded-lg border border-[#1e1e2e] p-8 shadow-2xl text-center">
+          <div className="text-[#8888a0]">Loading...</div>
+        </div>
+      </div>
+    }>
+      <SignupContent />
+    </Suspense>
+  );
+}

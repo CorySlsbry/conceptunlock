@@ -1,0 +1,46 @@
+{
+  "packageId": "app.vercel.conceptunlock.twa",
+  "host": "conceptunlock.vercel.app",
+  "name": "ConceptUnlock",
+  "launcherName": "ConceptUnloc",
+  "display": "standalone",
+  "themeColor": "#2563EB",
+  "themeColorDark": "#0f172a",
+  "navigationColor": "#2563EB",
+  "navigationColorDark": "#0f172a",
+  "navigationDividerColor": "#2563EB",
+  "navigationDividerColorDark": "#0f172a",
+  "backgroundColor": "#0f172a",
+  "enableNotifications": true,
+  "startUrl": "/?source=twa",
+  "iconUrl": "https://conceptunlock.vercel.app/icon-512.svg",
+  "maskableIconUrl": "https://conceptunlock.vercel.app/icon-maskable.svg",
+  "monochromeIconUrl": "https://conceptunlock.vercel.app/icon-512.svg",
+  "shortcuts": [],
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shareTarget": null,
+  "orientation": "portrait",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://conceptunlock.vercel.app/",
+  "minSdkVersion": 21,
+  "description": "Upload a syllabus. Get a personalized AI tutor and study plan instantly."
+}
